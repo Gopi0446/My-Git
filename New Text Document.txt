@@ -1,0 +1,285 @@
+https://id.starbucks.com/secureauth16/secureauth.aspx
+
+%run  ../InitializeNotebook   this notebokk located in the parent directory("/" indicates the parent dictionary) ,
+this we can reuse the code or run specific parts of the code from another notebook within your current notebook.
+
+%run ./batchUpdate  notebooks used to excute another notebook named batchupdate located in the current directory.
+
+
+setbatchStatus('true','IPM_Bronze_DataSet_Creation','start',' New batch started with batch no')
+ function call with four parameters.
+
+1) True says that something is valid or successful
+2) IPM_Bronze_DataSet_Creation this could be an identifier for a specfic process or task , such as creating a dataset named "IPM _Bronze_dataset_creation"
+3) "Start" This likely represents the starting point or begning of the identified by "IPM_Bronze_DataSet_Creation"
+4) "New batch started with batch no" this is likiley a message or description associated with starting of the process.It could indiacte that a new batch of data
+processing  has begun and may include a batch number or identifier.
+
+
+%sql select * from develop.ipm_silverweeklysalesselfsubmitheader table in the develop schema or database.It's way to view the develop schema or database.
+It's way to view the entire contents of the table.
+
+
+salesTransactionSchema = StructType([
+    StructField("specversion", StringType(), True())]
+This defines a schema for a sales transaction , likely  in a spark application or data proceesing  pipeline.
+1) StructType This indictaes that a structred data type is being defined.This structured datatype will contain multiple fields.
+2) StructField("specversion", StringType(), True())] This defines a single field within the structured datatype.
+("specversion")This is the name of the filed.in this case ,It's likely the version of the sales transaction specfication.
+Stringtype()this specifies the data type of the field.Here It's a string type indicating that Specversion feild will contain string values.
+"True" This is parameter indicates whether the field allows null values.in ths case , True Means that null values are allowed.
+
+GIT Token: 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
+
+https://retailstarbucks1com.sharepoint.com.rproxy.goskope.com/sites/pwa/_layouts/15/pwa/Timesheet/MyTSSummary.aspx
+
+https://retailstarbucks1com.sharepoint.com.rproxy.goskope.com/sites/pwa/Timesheet.aspx
+
+
+IPM_SILVER take a refrence from this notebook
+we have 5 data sets.
+1)Out bound event schema
+2)Weekly sales schema
+3)Market Profit and loss
+4)Store profit and loss schema
+5)Digital metric Schema
+
+Weekly sales schema data for create table
+table specifc 
+manually upload the table
+
+
+create 
+{
+  "totalCounts": "2",
+  "totalSumAmount" : "5500000",
+  "data" : [
+    {
+      "storeNumber": "74265",
+      "weekEndingDate": "2018-04-22",
+      "weeklyOperatingDays": "7",
+      "transactions": "872",
+      "netSales": "4666",
+      "createdBy": "EDW",
+      "createdOn": "2019-11-14T22:20:53.480",
+      "modifiedBy": "EDW",
+      "modifiedOn": "2021-09-22T04:41:48.840"
+    },
+    {
+      "storeNumber": "84265",
+      "weekEndingDate": "2018-04-22",
+      "weeklyOperatingDays": "6",
+      "transactions": "892",
+      "netSales": "8999",
+      "createdBy": "JFK",
+      "createdOn": "2019-11-14T22:20:53.480",
+      "modifiedBy": "JFK",
+      "modifiedOn": "2021-09-22T04:41:48.840"
+    }
+  ]
+}
+
+try:
+  
+  setbatchStatus('false','IPM_Silver','start',' Table : ' + tempRecords +' inserting records in the table')
+
+  insertRecordsToTempTable = """INSERT INTO {}
+                                          (  xenvver,
+                                             specversion,
+                                             source,
+                                             headerType,
+                                             xcorrelationid,
+                                             headerId,
+                                             datacontenttype,
+                                             time,
+                                             storeNumber,
+                                             weekEndingDate,
+                                             weeklyOperatingDays,
+                                             transactions,
+                                             netSales,
+                                             createdBy,
+                                             source_createdDt,
+                                             modifiedBy,
+                                             source_modifiedDt,
+                                             UniqueID,
+                                             sessionId,
+                                             creationDate,
+                                             intfstatus,
+                                             MarketStoreNumber,
+                                             MarketID,
+                                             SubMarketID,
+                                             batchId)
+                                    
+                                    
+                                          SELECT  
+                                             xenvver,
+                                             specversion,
+                                             source,
+                                             headerType,
+                                             xcorrelationid,
+                                             headerId,
+                                             datacontenttype,
+                                             time,
+                                             storeNumber,
+                                             weekEndingDate,
+                                             weeklyOperatingDays,
+                                             transactions,
+                                             netSales,
+                                             createdBy,
+                                             source_createdDt,
+                                             modifiedBy,
+                                             source_modifiedDt,
+                                             UniqueID,
+                                             sessionId,
+                                             creationDate,
+                                             intfstatus,
+                                             MarketStoreNumber,
+                                             MarketID,
+                                             SubMarketID,
+                                             batchId FROM {} """.format(tempRecords,silverRecords)
+
+  tempInsertRecords_df = spark.sql(insertRecordsToTempTable)
+  tempCount = tempInsertRecords_df.first()['num_inserted_rows']
+
+except Exception as e:
+  setbatchStatus('false','IPM_Silver','error',' Table : ' + tempRecords +' , failed while inserting records in the table.' + ', Message : ' + str(e).replace("'",""))
+  sLog(3, e)
+  raise e
+   
+==================================================================================================================
+
+Daily sales
+
+from datetime import datetime
+import pytz
+from pyspark.sql.window import Window
+from pyspark.sql.functions import row_number
+
+tabDaily = db_name + "." + "dailyStoreSales"
+tabTempDaily = db_name + "." + "tempdailyNetSales"
+tabNetDaily = db_name + "." + "dailyNetSales"
+recView = "recordsToUpdate"
+
+UTC = pytz.UTC
+now = datetime.now(UTC)
+sLog(1, "Execution starting on " + now.strftime("%Y-%m-%d %H:%M:%S"))
+
+try:
+  selectDailyRec = """ SELECT uuid
+                              ,CAST(storeNumber AS INT) AS storeNumber
+                              ,transactionDate             
+                        FROM {}
+                        WHERE netSales_IntfStatus = 'new'
+                        AND revenueItemFlag = 'Y' """.format(tabDaily)
+            
+  dailyRec_df = spark.sql(selectDailyRec);
+  dailyRec_df.createOrReplaceTempView(recView);
+  
+except Exception as e:
+  sLog(3,e)
+  raise e
+
+try:
+  setbatchStatus('false','DailyNetSales','start',' Table : ' + tabTempDaily +' inserting records in the table')
+  
+  insertTempTable = """ INSERT INTO {} 
+                        (storeNumber,
+                         transactionDate,
+                         producerId,
+                         totalTransactionCount,
+                         netSales)
+                        SELECT storeNumber,
+                               transactionDate,
+                               producerId,
+                               SUM(totalTransactionCount),
+                               NVL(SUM(priceAmount),0) - NVL(SUM(voidAmount),0) - NVL(SUM(discountAmount),0) - 
+                               NVL(ABS(SUM(refundAmount)),0) AS netSales
+                        FROM {}
+                        WHERE netSales_IntfStatus = 'new'
+                        AND revenueItemFlag = 'Y'
+                        GROUP BY storeNumber,
+                                 transactionDate,
+                                 producerId """.format(tabTempDaily,tabDaily)
+            
+  dailyRecords_df = spark.sql(insertTempTable);
+  inserted_count = dailyRecords_df.first()['num_inserted_rows']
+  display(dailyRecords_df)
+  
+except Exception as e:
+  setbatchStatus('false','DailyNetSales','error',' Table : ' + tabTempDaily +' failed while inserting records in the table.'+ ', Message : ' + str(e).replace("'",""))
+  sLog(3,e)
+  raise e
+
+try:
+  updateInprogressRec = """ UPDATE  {}
+							                SET netSales_IntfStatus = 'inprogress' 
+                            WHERE netSales_IntfStatus = 'new'
+                            AND uuid IN (SELECT uuid FROM {})""".format(tabDaily,recView)
+
+  updated_count_df = spark.sql(updateInprogressRec);
+  updated_count = updated_count_df.first()['num_affected_rows']
+  setbatchStatus('false','DailyNetSales','success',' Table : ' + tabDaily  +' Success while updating  records to inprogress ' +  'Records Affected : '  + str(updated_count) )
+  
+except Exception as e:
+  setbatchStatus('false','DailyNetSales','error',' Table : ' + tabDaily +' error while updating records to inprogress '  + ', Message : ' + str(e).replace("'",""))
+  sLog(3,e)
+  raise e
+
+try:
+  
+  setbatchStatus('false','DailyNetSales','start',' Table : ' + tabNetDaily +' Merging records in the table from '+ tabTempDaily )
+
+  dailyNetSalesMerge = """ MERGE INTO {} AS dss
+                            USING {} AS dns
+                              ON dss.storeNumber = dns.storeNumber
+                              AND dss.transactionDate = dns.transactionDate
+                              AND dss.producerId = dns.producerId
+                           WHEN MATCHED THEN 
+                            UPDATE SET dss.netSales = dns.netSales,
+                                       dss.totalTransactionCount = dns.totalTransactionCount,
+                                       dss.updatedDate = current_timestamp()
+                           WHEN NOT MATCHED THEN
+                           INSERT (storeNumber
+                                  ,transactionDate
+                                  ,producerId
+                                  ,totalTransactionCount
+                                  ,netSales
+                                  ,creationDate)
+                           VALUES (dns.storeNumber
+                                  ,dns.transactionDate
+                                  ,dns.producerId
+                                  ,dns.totalTransactionCount
+                                  ,dns.netSales
+                                  ,current_timestamp()) """.format(tabNetDaily,tabTempDaily)
+
+
+  total_records_df = spark.sql(dailyNetSalesMerge);
+  total_records_count = total_records_df.first()['num_affected_rows']
+  setbatchStatus('false','DailyNetSales','success',' Table : ' + tabNetDaily +' Success while Merging records in the table from '+ tabTempDaily + ' Records Affected : ' + str(total_records_count) )
+
+except Exception as e:
+  setbatchStatus('false','DailyNetSales','error',' Table : ' + tabNetDaily +' Failed while Merging records in the table from '+ tabTempDaily + ', Message : ' + str(e).replace("'",""))
+  sLog(3,e)
+  raise e
+
+try:
+  updateProcessedRec = """ UPDATE {}
+                            SET netSales_IntfStatus = 'processed'
+                            WHERE netSales_IntfStatus = 'inprogress' """.format(tabDaily)
+
+  processed_records_df = spark.sql(updateProcessedRec);
+  processed_records_count = processed_records_df.first()['num_affected_rows']
+
+  setbatchStatus('false','DailyNetSales','success',' Table : ' + tabDaily +' Success while updating records to processed ' +  'Records Affected : '  + str(processed_records_count) )
+
+  deleteTempDailyTable = "DELETE FROM {}".format(tabTempDaily)
+  spark.sql(deleteTempDailyTable);
+  spark.catalog.dropTempView(recView);
+
+except Exception as e:
+  setbatchStatus('false','DailyNetSales','error',' Table : ' + tabDaily +' error while updating records to processed  '  + ', Message : ' + str(e).replace("'",""))
+  sLog(3,e)
+  raise e
+
+
+
